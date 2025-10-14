@@ -1,0 +1,52 @@
+name: Post Proverb to Telegram
+
+on:
+  schedule:
+    - cron: "0 9 * * 1,4" # Twice a week: Monday and Thursday at 09:00 UTC
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read first proverb and send to Telegram
+        run: |
+          # Configure git identity
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Pull latest changes
+          git pull origin main
+
+          # Read first proverb
+          proverb=$(head -n 1 proverbs.txt)
+
+          # Stop if empty
+          if [ -z "$proverb" ]; then
+            echo "No proverb left to send."
+            exit 0
+          fi
+
+          echo "Sending proverb: $proverb"
+
+          # Send to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.CHAT_ID }}" \
+            -d "text=$proverb"
+
+          # Remove sent proverb from file
+          tail -n +2 proverbs.txt > proverbs_new.txt
+          mv proverbs_new.txt proverbs.txt
+
+          # Commit and push changes
+          git add proverbs.txt
+          git commit -m "Sent proverb: $proverb"
+          git push origin main
